@@ -82,7 +82,8 @@ def test_retry_logic_on_500_then_success(mock_get):
 
 
 @patch("requests.Session.get")
-def test_respects_retry_after_on_429(mock_get):
+def test_respects_retry_after_on_429(mock_get, monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda s: None)  # no-op sleep
     page = {"page": 1, "total_pages": 1, "data": [{"id": 1}]}
     resp429 = make_response(429, headers={"Retry-After": "1"})
     resp200 = make_response(200, page)
@@ -114,3 +115,17 @@ def test_client_error_raises_error(mock_get):
         client.fetch_all_customers()
 
     assert "Client error 404" in str(excinfo.value)
+
+
+# Add a tiny unit test that when ClientError is raised, the APIClientError contains url and status_code
+@patch("requests.Session.get")
+def test_api_client_error_contains_context(mock_get):
+    resp = make_response(404, text="Not found")
+    mock_get.return_value = resp
+    client = CustomerAPIClient(BASE_URL)
+    with pytest.raises(APIClientError) as excinfo:
+        client.fetch_all_customers()
+    err = excinfo.value
+    assert hasattr(err, "url") and err.url is not None
+    assert err.status_code == 404
+    assert err.retries >= 1
