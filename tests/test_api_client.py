@@ -2,6 +2,7 @@ import pytest
 import requests
 from unittest.mock import MagicMock, patch
 from src.api_client import CustomerAPIClient, APIClientError
+from unittest.mock import patch as umpatch
 
 
 BASE_URL = "https://reqres.in/api"
@@ -41,13 +42,14 @@ def test_fetch_all_customers_success(mock_get):
 
 
 @patch("requests.Session.get")
-def test_deduplication_keeps_first_seen(mock_get):
+def test_client_returns_all_raw_records(mock_get):
+    # Client should return all raw records (no dedupe) so processor can resolve duplicates by quality.
     page1 = {
         "page": 1,
         "total_pages": 1,
         "data": [
             {"id": 1, "email": "first@x.com"},
-            {"id": 1, "email": "second@x.com"},  # duplicate
+            {"id": 1, "email": "second@x.com"},  # duplicate preserved
         ],
     }
     mock_get.return_value = make_response(200, page1)
@@ -55,12 +57,16 @@ def test_deduplication_keeps_first_seen(mock_get):
     client = CustomerAPIClient(BASE_URL)
     customers = client.fetch_all_customers()
 
-    assert len(customers) == 1
-    assert customers[0]["email"] == "first@x.com"  # keeps first seen
+    # Expect both entries preserved so processor can later pick by quality
+    assert len(customers) == 2
+    assert customers[0]["email"] == "first@x.com"
+    assert customers[1]["email"] == "second@x.com"
 
 
+@umpatch("time.sleep", lambda s: None)
 @patch("requests.Session.get")
 def test_retry_logic_on_500_then_success(mock_get):
+
     # First two fail with 500, third succeeds
     fail_resp = make_response(500)
     success_page = {"page": 1, "total_pages": 1, "data": [{"id": 1}]}
