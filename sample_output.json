@@ -1,0 +1,68 @@
+{
+  "metadata": {
+    "total_customers": 5,
+    "export_timestamp": "2025-09-05T12:00:00Z",
+    "data_quality_summary": {
+      "high_quality": 3,
+      "medium_quality": 1,
+      "low_quality": 1
+    }
+  },
+  "customers": [
+    {
+      "customer_id": 1,
+      "full_name": "Alice Alpha",
+      "email_domain": "a.example.com",
+      "engagement_level": "high",
+      "activity_status": "active",
+      "acquisition_channel": "website",
+      "market_segment": "US-West",
+      "customer_tier": "premium",
+      "data_quality_score": 100
+    },
+    {
+      "customer_id": 2,
+      "full_name": "Ben Beta",
+      "email_domain": "b.example.com",
+      "engagement_level": "medium",
+      "activity_status": "inactive",
+      "acquisition_channel": "mobile_app",
+      "market_segment": "EU-Central",
+      "customer_tier": "basic",
+      "data_quality_score": 85
+    },
+    {
+      "customer_id": 3,
+      "full_name": "Carl Chen",
+      "email_domain": "c.example.com",
+      "engagement_level": "high",
+      "activity_status": "active",
+      "acquisition_channel": "email_campaign",
+      "market_segment": "APAC",
+      "customer_tier": "premium",
+      "data_quality_score": 95
+    },
+    {
+      "customer_id": 4,
+      "full_name": "Dana Doe",
+      "email_domain": "unknown",
+      "engagement_level": "low",
+      "activity_status": "inactive",
+      "acquisition_channel": "website",
+      "market_segment": "US-East",
+      "customer_tier": "enterprise",
+      "data_quality_score": 60
+    },
+    {
+      "customer_id": 5,
+      "full_name": "Zoe Zhang",
+      "email_domain": "z.example.com",
+      "engagement_level": "high",
+      "activity_status": "active",
+      "acquisition_channel": "mobile_app",
+      "market_segment": "US-West",
+      "customer_tier": "premium",
+      "data_quality_score": 100
+    }
+  ]
+}
