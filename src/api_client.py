@@ -1,10 +1,3 @@
-"""
-- fetch paginated users from an API https://reqres.in/api/users
-- retries with exponential backoff (1s, 2s, 4s)
-- special handling for 429 (uses Retry-After when provided)
-- deduplicates by `id` (keeps first-seen)
-"""
-
 from typing import Dict, List, Optional
 import logging
 import time
@@ -13,7 +6,7 @@ import requests
 
 
 class APIClientError(Exception):
-    # Custom exception for API client errors.
+    """Custom exception for API client errors."""
 
     def __init__(
         self,
@@ -45,9 +38,7 @@ class CustomerAPIClient:
     def __init__(
         self,
         base_url: str,
-        api_key: Optional[
-            str
-        ] = None,  # Does not really requires an API key for this API
+        api_key: Optional[str] = None,
         session: Optional[requests.Session] = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff: Optional[tuple] = None,
@@ -77,14 +68,16 @@ class CustomerAPIClient:
         return headers
 
     def _request(self, url: str, params: Optional[Dict] = None) -> Dict:
-        # Perform GET with retry/backoff and special 429 handling.
+        """Perform GET with retry/backoff and special 429 handling."""
         params = params or {}
         headers = self._get_headers()
+        last_exc: Optional[Exception] = None
 
         for attempt in range(1, self.max_retries + 1):
             try:
                 resp = self.session.get(url, params=params, headers=headers, timeout=10)
             except requests.RequestException as exc:
+                last_exc = exc
                 self.logger.warning(
                     "Network error on attempt %d for %s: %s", attempt, url, exc
                 )
@@ -96,7 +89,12 @@ class CustomerAPIClient:
                 try:
                     return resp.json()
                 except ValueError:
-                    raise APIClientError(f"Invalid JSON from {url}")
+                    raise APIClientError(
+                        f"Invalid JSON from {url}",
+                        url=url,
+                        status_code=resp.status_code,
+                        retries=attempt,
+                    )
 
             # Rate limit -> respect Retry-After if possible
             if resp.status_code == 429:
@@ -108,7 +106,6 @@ class CustomerAPIClient:
                     retry_after,
                 )
                 if retry_after:
-                    # Try to parse and wait server-specified seconds
                     try:
                         wait = int(retry_after)
                     except ValueError:
@@ -116,6 +113,9 @@ class CustomerAPIClient:
                     time.sleep(wait)
                 else:
                     self._sleep_for_attempt(attempt)
+                last_exc = APIClientError(
+                    "429 Too Many Requests", url=url, status_code=429, retries=attempt
+                )
                 continue
 
             # Server errors -> retry
@@ -127,12 +127,21 @@ class CustomerAPIClient:
                     url,
                 )
                 self._sleep_for_attempt(attempt)
+                last_exc = APIClientError(
+                    f"{resp.status_code} server error",
+                    url=url,
+                    status_code=resp.status_code,
+                    retries=attempt,
+                )
                 continue
 
             # Client error (other than 429) -> don't retry
             if 400 <= resp.status_code < 500:
                 raise APIClientError(
-                    f"Client error {resp.status_code} for {url}: {resp.text}"
+                    f"Client error {resp.status_code} for {url}: {resp.text}",
+                    url=url,
+                    status_code=resp.status_code,
+                    retries=attempt,
                 )
 
             # Unexpected -> retry
@@ -143,9 +152,32 @@ class CustomerAPIClient:
                 url,
             )
             self._sleep_for_attempt(attempt)
+            last_exc = APIClientError(
+                f"Unexpected status {resp.status_code}",
+                url=url,
+                status_code=resp.status_code,
+                retries=attempt,
+            )
 
         # exhausted retries
-        raise APIClientError(f"Failed to fetch {url} after {self.max_retries} attempts")
+        if isinstance(last_exc, APIClientError):
+            raise APIClientError(
+                str(last_exc),
+                url=last_exc.url,
+                status_code=last_exc.status_code,
+                retries=self.max_retries,
+            )
+        if last_exc:
+            raise APIClientError(
+                f"Failed to fetch {url} after {self.max_retries} attempts: {last_exc}",
+                url=url,
+                retries=self.max_retries,
+            )
+        raise APIClientError(
+            f"Failed to fetch {url} after {self.max_retries} attempts",
+            url=url,
+            retries=self.max_retries,
+        )
 
     def _sleep_for_attempt(self, attempt: int) -> None:
         idx = min(attempt - 1, len(self.backoff) - 1)
@@ -159,7 +191,13 @@ class CustomerAPIClient:
         return self._request(url, params={"page": page})
 
     def fetch_all_customers(self) -> List[Dict]:
-        """Fetch all pages from /users, dedupe by `id`, return list of user dicts."""
+        """
+        Fetch all pages from /users and return combined raw records.
+
+        NOTE: Deduplication is intentionally NOT performed in the client so that
+        the processor (which computes data_quality_score) can decide which duplicate
+        to keep (highest-quality). This follows the project spec.
+        """
         # Fetch first page to learn pagination
         first = self._fetch_page(1)
         data = list(first.get("data") or [])
@@ -175,22 +213,5 @@ class CustomerAPIClient:
             self.logger.info("Fetched page %d with %d records", p, len(page_data))
             data.extend(page_data)
 
-        # Deduplicate by id (keep first seen)
-        seen = {}
-        for item in data:
-            item_id = item.get("id")
-            if item_id is None:
-                # generate a unique fallback key so malformed but present records are not lost
-                key = f"_noid_{id(item)}"
-            else:
-                key = f"id_{item_id}"
-            if key not in seen:
-                seen[key] = item
-            else:
-                self.logger.debug(
-                    "Duplicate encountered for key=%s; keeping first seen", key
-                )
-
-        results = list(seen.values())
-        self.logger.info("Returning %d unique raw customer records", len(results))
-        return results
+        self.logger.info("Returning %d raw customer records (no dedupe)", len(data))
+        return data
