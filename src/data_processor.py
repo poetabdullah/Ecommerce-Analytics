@@ -1,9 +1,27 @@
 import random
 import re
-from typing import Dict, List
+from typing import Dict, List, Optional
+import logging
 
 
 class CustomerDataProcessor:
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or self._default_logger()
+
+    def _default_logger(self) -> logging.Logger:
+        logger = logging.getLogger(self.__class__.__name__)
+        if not logger.handlers:
+            h = logging.StreamHandler()
+            h.setFormatter(
+                logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+            )
+            logger.addHandler(h)
+            logger.setLevel(logging.INFO)
+        return logger
+
+    # then inside process_customers / _transform_customer we can optionally log:
+    # self.logger.debug("Transforming customer id=%s", customer_id)
+
     # Process and standardize raw customer data from the API.
 
     ENGAGEMENT_LEVELS = ["high", "medium", "low"]
