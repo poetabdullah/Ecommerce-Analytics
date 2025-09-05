@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field, EmailStr, validator
 
 class RawCustomer(BaseModel):
     # Schema for customer records as returned by the Reqres API.
-
     id: int
     email: Optional[str] = None
     first_name: Optional[str] = None
@@ -21,7 +20,6 @@ class RawCustomer(BaseModel):
 
 class ProcessedCustomer(BaseModel):
     # Schema for standardized customer records for analytics.
-
     customer_id: int
     full_name: str
     email_domain: str = Field(default="unknown")
